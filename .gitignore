@@ -1,0 +1,4 @@
+node_modules/
+dist/
+city-timezone-data.js
+*.html
