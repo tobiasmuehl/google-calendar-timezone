@@ -4,7 +4,8 @@ I highly dislike the Google Calendar timezone selection dropdown. It doesn't hav
 
 ## Demo
 
-<video src="https://raw.githubusercontent.com/tobiasmuehl/google-calendar-timezone/main/before-after-demo.mp4" autoplay loop muted playsinline width="600"></video>
+https://github.com/user-attachments/assets/09a0ce70-b0fe-41f3-a987-b00b05bb95b0
+
 
 ## Features
 
