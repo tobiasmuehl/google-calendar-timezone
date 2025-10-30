@@ -2,6 +2,10 @@
 
 I highly dislike the Google Calendar timezone selection dropdown. It doesn't have a search bar - ironic for a search company! This GreasyMonkey/Tampermonkey userscript  adds keyboard-only city search inputs to Google Calendar timezone dropdowns with fuzzy matching, comprehensive city data, and airport codes.
 
+## Demo
+
+<video src="https://raw.githubusercontent.com/tobiasmuehl/google-calendar-timezone/main/before%20after%20video.mp4" autoplay loop muted playsinline width="600"></video>
+
 ## Features
 
 - 🔍 **Fuzzy search** - Type city names with typo tolerance
