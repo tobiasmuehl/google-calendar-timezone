@@ -40863,15 +40863,80 @@
                 return;
             }
 
+            // Timezone alias mappings for common variations
+            const timezoneAliases = {
+                'Africa/Addis_Ababa': ['Africa/Nairobi', 'EAT', 'East Africa Time'],
+                'America/New_York': ['Eastern Time', 'EST', 'EDT', 'America/Detroit', 'America/Kentucky/Louisville', 'America/Kentucky/Monticello', 'America/Indiana/Indianapolis', 'America/Indiana/Vincennes', 'America/Indiana/Winamac', 'America/Indiana/Marengo', 'America/Indiana/Petersburg', 'America/Indiana/Vevay'],
+                'America/Chicago': ['Central Time', 'CST', 'CDT', 'America/Indiana/Knox', 'America/Indiana/Tell_City', 'America/Menominee', 'America/North_Dakota/Center', 'America/North_Dakota/New_Salem', 'America/North_Dakota/Beulah'],
+                'America/Denver': ['Mountain Time', 'MST', 'MDT', 'America/Boise'],
+                'America/Los_Angeles': ['Pacific Time', 'PST', 'PDT'],
+                'America/Phoenix': ['Arizona Time', 'America/Creston'],
+                'America/Anchorage': ['Alaska Time', 'AKST', 'AKDT'],
+                'Pacific/Honolulu': ['Hawaii Time', 'HST', 'Hawaii Standard Time'],
+                'Europe/London': ['GMT', 'BST', 'Greenwich', 'Europe/Belfast', 'Europe/Guernsey', 'Europe/Isle_of_Man', 'Europe/Jersey'],
+                'Europe/Paris': ['CET', 'CEST', 'Europe/Brussels', 'Europe/Amsterdam', 'Europe/Luxembourg', 'Europe/Monaco'],
+                'Europe/Berlin': ['Europe/Busingen', 'Europe/Zurich'],
+                'Europe/Rome': ['Europe/Vatican', 'Europe/San_Marino'],
+                'Europe/Madrid': ['Europe/Andorra'],
+                'Asia/Tokyo': ['JST', 'Japan Standard Time'],
+                'Asia/Shanghai': ['China Standard Time', 'CST', 'Asia/Chongqing', 'Asia/Harbin', 'Asia/Kashgar', 'Asia/Urumqi'],
+                'Asia/Kolkata': ['IST', 'India Standard Time', 'Asia/Calcutta'],
+                'Asia/Dubai': ['GST', 'Gulf Standard Time', 'Asia/Muscat'],
+                'Australia/Sydney': ['AEST', 'AEDT', 'Australia/Melbourne', 'Australia/ACT', 'Australia/Canberra', 'Australia/NSW'],
+                'Australia/Brisbane': ['AEST', 'Australia/Queensland', 'Australia/Lindeman']
+            };
+
             // Find matching option (with or without "suggestion:" prefix)
             const options = listbox.querySelectorAll('[role="option"]');
             let matchingOption = null;
 
+            // Strategy 1: Exact match
             for (const option of options) {
                 const dataValue = option.getAttribute('data-value');
                 if (dataValue === result.timezone || dataValue === `suggestion:${result.timezone}`) {
                     matchingOption = option;
                     break;
+                }
+            }
+
+            // Strategy 2: Try timezone aliases
+            if (!matchingOption) {
+                for (const [canonicalTz, aliases] of Object.entries(timezoneAliases)) {
+                    if (aliases.includes(result.timezone)) {
+                        console.log('Found alias match:', result.timezone, '→', canonicalTz);
+                        for (const option of options) {
+                            const dataValue = option.getAttribute('data-value');
+                            if (dataValue === canonicalTz || dataValue === `suggestion:${canonicalTz}`) {
+                                matchingOption = option;
+                                break;
+                            }
+                        }
+                        if (matchingOption) break;
+                    }
+                }
+            }
+
+            // Strategy 3: Match by UTC offset as last resort
+            if (!matchingOption) {
+                try {
+                    const targetOffset = new Date().toLocaleString('en-US', { timeZone: result.timezone, timeZoneName: 'shortOffset' }).split('GMT')[1];
+                    console.log('Target timezone offset:', targetOffset);
+
+                    for (const option of options) {
+                        const dataValue = option.getAttribute('data-value').replace('suggestion:', '');
+                        try {
+                            const optionOffset = new Date().toLocaleString('en-US', { timeZone: dataValue, timeZoneName: 'shortOffset' }).split('GMT')[1];
+                            if (optionOffset === targetOffset) {
+                                console.log('Found offset match:', dataValue, 'with offset', optionOffset);
+                                matchingOption = option;
+                                break;
+                            }
+                        } catch (e) {
+                            // Skip invalid timezones
+                        }
+                    }
+                } catch (e) {
+                    console.error('Error matching by offset:', e);
                 }
             }
 
@@ -40896,6 +40961,13 @@
                 input.focus();
             } else {
                 console.error('Matching timezone option not found:', result.timezone);
+                console.log('Available timezone options:', Array.from(options).map(o => o.getAttribute('data-value')));
+
+                // Still clear the input even if we couldn't find a match
+                input.value = '';
+                resultsDropdown.style.display = 'none';
+                currentResults = [];
+                selectedIndex = -1;
             }
         }
 
@@ -41050,6 +41122,37 @@
             }
         });
 
+        // Alternative method: if no timezone dropdowns found, look for comboboxes with timezone options
+        if (timezoneDropdowns.length === 0) {
+            console.log('Original method found no timezone dropdowns, trying alternatives...');
+            const comboboxes = document.querySelectorAll('[role="combobox"]');
+
+            comboboxes.forEach(combobox => {
+                const listboxId = combobox.getAttribute('aria-controls');
+                if (listboxId) {
+                    const listbox = document.getElementById(listboxId);
+                    if (listbox) {
+                        const options = listbox.querySelectorAll('[role="option"]');
+                        // Check if options look like timezones (contain GMT, UTC, or paths with /)
+                        const hasTimezoneOptions = Array.from(options).some(option => {
+                            const dataValue = option.getAttribute('data-value') || '';
+                            const text = option.textContent || '';
+                            return dataValue.includes('/') || text.includes('GMT') || text.includes('UTC');
+                        });
+
+                        if (hasTimezoneOptions && options.length > 10) {
+                            console.log('Found timezone dropdown (alternative method):', combobox);
+                            // Find the parent container
+                            const container = combobox.closest('[data-stable-unique-label-id]') || combobox.parentElement;
+                            if (container && !timezoneDropdowns.includes(container)) {
+                                timezoneDropdowns.push(container);
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
         return timezoneDropdowns;
     }
 
@@ -41058,32 +41161,45 @@
 
         console.log(`Found ${timezoneDropdowns.length} timezone dropdown(s)`);
 
-        timezoneDropdowns.forEach((dropdown) => {
-            // Check if we already injected a search input
-            if (dropdown.querySelector('.tz-helper-search')) return;
+        timezoneDropdowns.forEach((dropdown, index) => {
+            // Check if we already injected a search input (check in closest container)
+            const container = dropdown.closest('[data-stable-unique-label-id]') || dropdown;
+            if (container.querySelector('.tz-helper-search')) {
+                console.log(`Search input already exists for dropdown ${index} - skipping`);
+                return;
+            }
 
-            // Determine if this is the end timezone by checking the label text
-            const labelId = dropdown.getAttribute('data-stable-unique-label-id');
-            const labelText = document.getElementById(labelId)?.textContent || '';
-            const isEndTimezone = labelText.includes('Ende') || labelText.includes('end');
+            // Determine if this is the end timezone by index (second dropdown = end timezone)
+            const isEndTimezone = index === 1;
 
-            console.log('Timezone dropdown type:', isEndTimezone ? 'END' : 'START', 'Label:', labelText);
+            console.log('Timezone dropdown type:', isEndTimezone ? 'END' : 'START', 'Index:', index);
 
             const searchInput = createSearchInput(dropdown, isEndTimezone);
             searchInput.classList.add('tz-helper-search');
 
-            // Insert after the dropdown
-            dropdown.appendChild(searchInput);
+            // Try to insert after the dropdown as sibling, fallback to appendChild
+            try {
+                dropdown.parentElement.insertBefore(searchInput, dropdown.nextSibling);
+            } catch (e) {
+                console.log('Fallback insertion method');
+                dropdown.appendChild(searchInput);
+            }
         });
     }
 
     // Watch for DOM changes (for when event dialog opens)
+    let observerTimeout;
     const observer = new MutationObserver(() => {
-        // Check if timezone dropdowns appeared
-        const timezoneDropdowns = findTimezoneDropdowns();
-        if (timezoneDropdowns.length > 0) {
-            injectSearchInputs();
-        }
+        // Debounce to prevent infinite loops
+        clearTimeout(observerTimeout);
+        observerTimeout = setTimeout(() => {
+            // Check if timezone dropdowns appeared
+            const timezoneDropdowns = findTimezoneDropdowns();
+            if (timezoneDropdowns.length > 0 && !document.querySelector('.tz-helper-search')) {
+                console.log('New timezone dropdowns detected, injecting search inputs...');
+                injectSearchInputs();
+            }
+        }, 500);
     });
 
     // Start observing
